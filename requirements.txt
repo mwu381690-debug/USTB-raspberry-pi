@@ -1,0 +1,27 @@
+# 树莓派情绪检测实验 - Python 依赖
+# Raspberry Pi Emotion Detection System
+
+# ── GPIO 控制 ──
+RPi.GPIO>=0.7.0
+
+# ── I2C 通信 (PCF8591, LCD1602) ──
+smbus2>=0.4.0
+
+# ── DHT11 温湿度 (推荐, 更稳定) ──
+adafruit-circuitpython-dht>=3.0.0
+# 还需要系统包: sudo apt install libgpiod2
+
+# ── OpenCV (摄像头 + 图像处理) ──
+opencv-python>=4.5.0
+numpy>=1.20.0
+
+# ── HDMI 桌宠显示 ──
+pygame>=2.0.0
+
+# ── 表情识别 (可选, 提供 7 种情绪识别) ──
+# 注意: FER 依赖 TensorFlow, 在树莓派上安装可能较复杂
+# 若不安装 FER, 系统会自动降级为 OpenCV 笑脸检测
+fer>=22.0.0
+
+# ── GIF 加载支持 (可选) ──
+Pillow>=9.0.0

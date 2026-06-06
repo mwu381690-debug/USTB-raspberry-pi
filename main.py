@@ -42,6 +42,8 @@ from sensors import SensorManager
 from lcd1602 import LCD1602
 from emotion import EmotionDetector
 from desktop_pet import DesktopPet, JoystickReader
+from emotion_logger import EmotionLogger
+from web_dashboard import WebDashboard, update_state, update_sensor_data, set_logger
 
 
 # ============================================================
@@ -189,10 +191,35 @@ def main():
     except Exception as e:
         print(f"  [FAIL] HDMI 显示: {e}")
 
+    # ──────────────────────────────────────────────────────
+    # 数据库 + Web 仪表盘
+    # ──────────────────────────────────────────────────────
+    logger = None
+    dashboard = None
+    detection_count = 0
+
+    try:
+        logger = EmotionLogger()
+        set_logger(logger)
+        print("  [OK] SQLite 数据库就绪")
+    except Exception as e:
+        print(f"  [WARN] 数据库初始化失败: {e}")
+
+    try:
+        dashboard = WebDashboard(host='0.0.0.0', port=5000)
+        dashboard.start()
+        print("  [OK] Web 仪表盘就绪")
+    except Exception as e:
+        print(f"  [WARN] Web 仪表盘启动失败: {e}")
+
+    # 定期记录传感器快照变量
+    last_sensor_log = time.time()
+
     print("\n" + "=" * 50)
     print("  系统就绪!")
     print("  摇杆: 移动 GIF 位置")
     print("  触摸 TTP223: 触发情绪检测")
+    print("  Web 仪表盘: http://<树莓派IP>:5000")
     print("  按 Ctrl+C 退出")
     print("=" * 50 + "\n")
 
@@ -227,6 +254,13 @@ def main():
             # ── 传感器数据 ──
             if sensors:
                 last_sensor_data = sensors.get_data()
+                # 更新 Web 仪表盘传感器数据
+                update_sensor_data(last_sensor_data)
+                # 每 30 秒记录一次传感器快照
+                if now - last_sensor_log >= 30:
+                    if logger:
+                        logger.log_sensor_snapshot(last_sensor_data)
+                    last_sensor_log = now
 
             # ── 终端打印 (每 2 秒) ──
             if now - last_terminal_print >= TERMINAL_PRINT_INTERVAL:
@@ -279,6 +313,23 @@ def main():
                               f"方法: {result['method']}")
                         if result.get('fer_full'):
                             print(f"         详细: {result['fer_full']}")
+
+                        # 记录到数据库
+                        detection_count += 1
+                        if logger:
+                            logger.log_emotion(
+                                emotion=current_emotion,
+                                confidence=result['confidence'],
+                                method=result['method'],
+                                fer_detail=result.get('fer_full')
+                            )
+                            if last_sensor_data:
+                                logger.log_sensor_snapshot(last_sensor_data)
+
+                        # 更新 Web 状态
+                        status_text = EMOTION_STATUS_MAP.get(
+                            current_emotion, EMOTION_STATUS_MAP['neutral'])
+                        update_state(current_emotion, status_text, detection_count)
 
                         # 切换到显示状态 (保持 GIF 原位置不变)
                         state = 'displaying'
@@ -370,6 +421,10 @@ def main():
         if buzzer:
             buzzer.cleanup()
             print("  [OK] 蜂鸣器已关闭")
+
+        if dashboard:
+            dashboard.stop()
+            print("  [OK] Web 仪表盘已关闭")
 
         if joystick:
             joystick.cleanup()
